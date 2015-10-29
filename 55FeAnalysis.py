@@ -32,12 +32,11 @@ VerboseProcessing = True
 # Pull in the path to the root files we're going to look at:
 TEAMDetectorDataPath = "/Users/vmgehman/Documents/Detectorstan/TEAMDetector/Data/scan_0000000186/"
 InputFilePaths = []
-InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000000/team1k_0000000186_0000000000.root")
-InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000001/team1k_0000000186_0000000001.root")
-InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000002/team1k_0000000186_0000000002.root")
-InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000003/team1k_0000000186_0000000003.root")
-InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000004/team1k_0000000186_0000000004.root")
-InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000005/team1k_0000000186_0000000005.root")
+for i in range(10):
+  InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_000000000" + str(i) + "/team1k_0000000186_000000000" + str(i) + ".root")
+for i in range(10, 100):
+  InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_00000000" + str(i) + "/team1k_0000000186_00000000" + str(i) + ".root")
+InputFilePaths.append(TEAMDetectorDataPath + "team1k_0000000186_0000000100/team1k_0000000186_0000000100.root")
 
 # Crack open the files, get the Sum(N) histograms...
 InputFiles = []
@@ -84,8 +83,8 @@ FitModel_Sum01 = PythonTools.GetRWFitModel("FitModel_Sum01", GlobalSum01Spectrum
 FitModel_Sum09 = PythonTools.GetRWFitModel("FitModel_Sum09", GlobalSum09Spectrum, 400., 100.)
 FitModel_Sum25 = PythonTools.GetRWFitModel("FitModel_Sum25", GlobalSum25Spectrum, 400., 100.)
 FitModels = [FitModel_Sum01, FitModel_Sum09, FitModel_Sum25]
-FitLos = [325.,  250.,  250.]
-FitHis = [600., 1000., 1200.]
+FitLos = [325., 250., 300.]
+FitHis = [800., 700., 850.]
 for i in range(len(GlobalSumSpectra)):
   GlobalSumSpectra[i].Draw()
   GlobalSumSpectra[i].Fit(FitModels[i], "QLLEM", "", FitLos[i], FitHis[i])
