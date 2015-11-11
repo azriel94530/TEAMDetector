@@ -155,3 +155,53 @@ def MakeFitAnnotationRW(fitmodel):
   ThisLine = "Sigmoid Norm. = "   + "{:6.2f}".format(SmdN) + " #pm " + "{:1.2f}".format(SNEr)
   thisAnnotation.AddText(ThisLine)
   return thisAnnotation
+
+# Create a TF1 for a Landau function...
+def GetLandauFunction(name, xlo, xhi, color, linestyle, norm, mean, width):
+  LandauFunc = ROOT.TF1("LandauFunc", "[0]*TMath::Landau(x,[1],[2])", xlo, xhi)
+  LandauFunc.SetName(name)
+  LandauFunc.SetLineColor(color)
+  LandauFunc.SetLineStyle(linestyle)
+  LandauFunc.SetLineWidth(5)
+  LandauFunc.SetParName(   0, "Norm.")
+  LandauFunc.SetParameters(0, norm)
+  LandauFunc.SetParLimits( 0, 0., 2. * norm)
+  LandauFunc.SetParName(   1, "Mean")
+  LandauFunc.SetParameters(1, mean)
+  LandauFunc.SetParLimits( 1, mean - 100., mean + 100.)
+  LandauFunc.SetParName(   2, "Width")
+  LandauFunc.SetParameters(2, width)
+  LandauFunc.SetParLimits( 2, 0.5 * width, 2. * width)
+  return LandauFunc
+
+def MakeFitAnnotationLandau(fitmodel):
+  thisChi2 = fitmodel.GetChisquare()
+  thisNDF  = fitmodel.GetNDF()
+  if(thisNDF == 0): thisNDF = 1
+  thisPVal = fitmodel.GetProb()
+  Norm = fitmodel.GetParameter(0)
+  NoEr = fitmodel.GetParError(0)
+  Mean = fitmodel.GetParameter(1)
+  MeEr = fitmodel.GetParError(1)
+  Widt = fitmodel.GetParameter(2)
+  WiEr = fitmodel.GetParError(2)
+  AnnotationLeft  = 0.672
+  AnnotationRight = 0.972
+  AnnotationTop   = 0.915
+  AnnotationBottom = 0.515
+  thisAnnotation = ROOT.TPaveText(AnnotationLeft,AnnotationBottom,AnnotationRight,AnnotationTop,"blNDC")
+  thisAnnotation.SetTextFont(42)
+  thisAnnotation.SetName(fitmodel.GetName() + "_AnnotationText")
+  thisAnnotation.SetBorderSize(1)
+  thisAnnotation.SetFillColor(ROOT.kWhite)
+  ThisLine = "#chi^{2} per DoF = " + "{:6.1f}".format(thisChi2) + " / " + str(thisNDF) + " = " + "{:6.2f}".format(thisChi2 / float(thisNDF))
+  thisAnnotation.AddText(ThisLine)
+  ThisLine = "(Probability = " + "{:2.6f}".format(thisPVal) + ")"
+  thisAnnotation.AddText(ThisLine)
+  ThisLine = "Mean  = "    + "{:6.2f}".format(Mean) + " #pm " + "{:1.2f}".format(MeEr)
+  thisAnnotation.AddText(ThisLine)
+  ThisLine = "Width =  "  + "{:6.2f}".format(Widt) + " #pm " + "{:1.2f}".format(WiEr)
+  thisAnnotation.AddText(ThisLine)
+  ThisLine = "Norm. = "   + "{:6.2f}".format(Norm) + " #pm " + "{:1.2f}".format(NoEr)
+  thisAnnotation.AddText(ThisLine)
+  return thisAnnotation

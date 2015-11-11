@@ -31,7 +31,7 @@ print "\t...Found", len(FileNameList), "files."
 
 # Now loop over all those file names and run the read code on each one.
 for filename in FileNameList:
-  thisCommand = "python ReadTEAMData.py " + filename
+  thisCommand = "python ReadTEAMData_mode2.py " + filename
   os.system(thisCommand)
 
 # Get the end time and report how long this calculation took

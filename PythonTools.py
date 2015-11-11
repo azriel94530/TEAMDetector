@@ -15,15 +15,17 @@ def StatusBar(current, total, steps):
   # Construct the string for the status bar.
   thisStatusBarString = '['
   for i in range(steps):
-    if(float(i) <= (FractionComplete * float(steps))):
+    #print float(i) / float(steps), FractionComplete * float(steps)
+    if(float(i) / float(steps) <= FractionComplete):
       thisStatusBarString += '*'
     else:
       thisStatusBarString += ' '
   thisStatusBarString += ']'
   # If it's not the first one, erase the old status bar...
-  if(current > 1): 
-    for i in range(len(thisStatusBarString)):
-      sys.stdout.write('\b')
+  if((float(current) / float(total)) > (1. / float(steps))): 
+    backspaceString = '\b' * len(thisStatusBarString)
+    sys.stdout.write(backspaceString)
+  # Now write the new status bar.
   sys.stdout.write(thisStatusBarString)
 
 def PlotHistogram(data, binedges, color, plottitle, xtitle, ytitle, plotfilepath):
@@ -32,6 +34,7 @@ def PlotHistogram(data, binedges, color, plottitle, xtitle, ytitle, plotfilepath
   plt.ylabel(ytitle)
   plt.title(plottitle)
   plt.grid(True)
+  plt.yscale('log')
   if os.path.exists(plotfilepath):
     print "Deleting old version of", plotfilepath
     os.system("rm " + plotfilepath)

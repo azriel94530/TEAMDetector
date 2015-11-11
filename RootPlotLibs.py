@@ -144,9 +144,9 @@ def GetReadyToPlot():
   canvas = A720pCanvas()
   # and a pad to set up the canvas...
   TopMargin    = 0.08
-  LeftMargin   = 0.04
+  LeftMargin   = 0.09
   BottomMargin = 0.09
-  RightMargin  = 0.11
+  RightMargin  = 0.02
   pad = ASimplePad()
   pad.SetTopMargin(TopMargin)
   pad.SetLeftMargin(LeftMargin)

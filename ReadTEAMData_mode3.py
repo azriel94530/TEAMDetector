@@ -1,12 +1,12 @@
 #!/usr/bin/python
 
 ####################################################################################################
-# Open a binary file file from the TEAM detector, read and decode it using the struct package, and #
-# then push it into a series of 2D histograms using imshow.  Once we have all these images in a    #
-# more python-friendly format, then look at each pixel in all 32 images in the file we're          #
-# examining, pick the median value of those 32 values, and construct an median dark image that we  #
-# can then dark correct each image in the file.  Once that's done, we'll go ahead and save a png   #
-# image of the raw and dark corrected images, and then write the image array to an HDF5 file.      #
+# Open a binary file file from the TEAM detector running in "mode 3,"" read and decode it using the#
+# struct package, and then push it into a series of 2D histograms using imshow.  Once we have all  #
+#these images in a more python-friendly format, then subtract the pre-trigger dark image (numbers: #
+# 0, 2, 4, 6...) from the post trigger exposure (numbers: 1, 3, 5, 7...).  Once that's done, we'll #
+# go ahead and save a png image of the raw and dark corrected images, and then write the image     #
+# array to an HDF5 file.                                                                           #
 ####################################################################################################
 
 # Header, import statements etc.
@@ -33,7 +33,7 @@ Debugging = False
 VerboseProcessing = True
 
 if(len(sys.argv) != 2):
-  print "Usage: [python] ReadTEAMData_mode2.py path/to/binary/image/file"
+  print "Usage: [python] ReadTEAMData_mode3.py path/to/binary/image/file"
   exit()
 
 # Pull in the path to the binary file we're going to look at
@@ -127,49 +127,15 @@ thisFile.close()
 # And convert ImagesInThisFile from a list of np.arrays to a three-dimensional np.array
 ImagesInThisFile = np.array(ImagesInThisFile)
 
-# Now construct the median dark image.
-MedianDarkImage = []
-MedianDarkImageName = "MedianDarkImage"
-MedianDarkImageTitle = "Median Dark Image for " + InputFilePath
-print "\tConstructing dark image from median pixel values from all", nImagesPerFile, "frames."
-irow = 0
-nStatusBarSteps = 100
-for row in range(nPixelsY):
-  irow += 1
-  #print irow, int(float(nPixelsY) / float(nStatusBarSteps))
-  if((nPixelsX >= nStatusBarSteps) and (irow % int(float(nPixelsY) / float(nStatusBarSteps)) == 0)):
-    PythonTools.StatusBar(irow, nPixelsY, nStatusBarSteps)
-  thisDarkRow = [0] * nPixelsX
-  thisDarkRow = np.array(thisDarkRow)
-  for col in range(nPixelsX):
-    thisPixelValueList = []
-    for imageNumber in range(nImagesPerFile):
-      thisPixelValueList.append(ImagesInThisFile[imageNumber][row][col])
-    thisDarkRow[col] = np.median(thisPixelValueList)
-  MedianDarkImage.append(thisDarkRow)
-print 
-# Now that we have the dark image, let's save and plot it too.
-MedianDarkImage = np.array(MedianDarkImage)
-OutputFile.create_dataset('DarkImage', data=MedianDarkImage)
-plt.imshow(MedianDarkImage, alpha=0.75, aspect='auto', origin='lower', extent=[0.,lSensorX, 0.,lSensorY], interpolation='none')
-plt.colorbar()
-plt.xlabel(xAxisTitle)
-plt.ylabel(yAxisTitle)
-plt.title(MedianDarkImageTitle)
-plt.grid(True)
-DarkImageFilePath = OutputDir + "/" + MedianDarkImageName + ".png"
-plt.savefig(DarkImageFilePath)
-plt.clf()
-
 # And now, let's dark correct the raw images.
 DCImages = []
-for imageNumber in range(nImagesPerFile):
-  print "\tDark-correcting image", imageNumber + 1, "out of", str(nImagesPerFile) + "..."
-  # Actually do the dark correction
-  thisDCImage = np.subtract(ImagesInThisFile[imageNumber], MedianDarkImage)
+for imageNumber in range(0, nImagesPerFile, 2):
+  print "\tDark-correcting exposure", len(DCImages) + 1, "out of", str(nImagesPerFile / 2) + "..."
+  # Actually do the dark correction.
+  thisDCImage = np.subtract(ImagesInThisFile[imageNumber + 1], ImagesInThisFile[imageNumber])
   # And save it to the hdf5 file.
   OutputFile.create_dataset('DCImage_' + str(imageNumber), data=thisDCImage)
-  # Add the dark corrected image to the list of them. 
+  # Add the dark corrected image to the list of them, so we can do things with them later in the code. 
   DCImages.append(thisDCImage)
 
 # Now that we have dark-corrected images, let's create the calorimetric spectra: Sum01, Sum09, and
@@ -184,7 +150,7 @@ SumNThreshold = -1000.
 imageNumber = -1
 for dcimage in DCImages:
   imageNumber += 1
-  print "\tCreating Sum(N) spectra for dark corrected image", imageNumber + 1, "out of", str(nImagesPerFile) + "..."
+  print "\tCreating Sum(N) spectra for dark corrected image", imageNumber + 1, "out of", str(len(DCImages)) + "..."
   # First, make a list of the local maxima in each image.
   frameMaxima = filters.maximum_filter(dcimage, LocalMaxNeighborhood)
   # This is a mask with the same shape as the image that has Boolean values for each pixel to
@@ -209,8 +175,8 @@ for dcimage in DCImages:
     if(EdgeHit): EdgeRows.append(i)
   LocalMaxCoords = np.delete(LocalMaxCoords, EdgeRows, 0)
   # Plot the dark corrected image with the coordinates of the local maxima marked on them.
-  thisDCImageName = "DC_TEAMimage_" + str(imageNumber)
-  thisDCImageTitle = "Dark-Corrected Image from TEAM Detector at Time Stamp: " + str(ImagesInThisFile[imageNumber][0][1])
+  thisDCImageName = "DC_TEAMimage_" + str(imageNumber + 1)
+  thisDCImageTitle = "Dark-Corrected Image from TEAM Detector at Time Stamp: " + str(ImagesInThisFile[2*imageNumber][0][1])
   plt.imshow(dcimage, alpha=0.75, aspect='auto', origin='lower', extent=[0.,lSensorX, 0.,lSensorY], interpolation='none')
   plt.colorbar()
   plt.xlabel(xAxisTitle)
@@ -269,7 +235,7 @@ xBinCenters = [x + (0.5 * xStep) for x in xBins[:-1]]
 xAxisTitle, yAxisTitle = 'Background Corrected ADC Value', 'Counts per ' + str(xStep) + ' ADC Unit Bin'
 OutputFile.create_dataset('xHistoAxisTitle', data=[xAxisTitle])
 OutputFile.create_dataset('yHistoAxisTitle', data=[yAxisTitle])
-for imageNumber in range(nImagesPerFile):
+for imageNumber in range(nImagesPerFile / 2):
   # Sum(1)
   thisPlotTitle = 'Sum(1) Spectrum from TEAM Detector at Time Stamp: ' + str(ImagesInThisFile[imageNumber][0][1])
   ImagePlotFilePath = SSOutputDir + "/Sum01Spectrum" + str(imageNumber) + ".pdf"
