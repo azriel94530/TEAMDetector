@@ -66,6 +66,8 @@ RestOfTheHeaderFormatCode = "<l"#The rest are little-endian, signed long
 nImagesPerFile = 32
 nPixelsX = 1024
 nPixelsY = 1024
+nADCchannels = 16
+xPixelsPerReadout = nPixelsX / nADCchannels
 lSensorX = 10.#[mm]
 lSensorY = 10.#[mm]
 lPixelX = 10. / float(nPixelsX)#Sensor is 10 mm x 10 mm
@@ -177,14 +179,14 @@ for imageNumber in range(nImagesPerFile):
 Sum01Spectra = []
 Sum09Spectra = []
 Sum25Spectra = []
-LocalMaxThreshold = 200.#[ADC Counts]
-LocalMaxNeighborhood = 10
-SumNThreshold = -1000.
+LocalMaxThreshold = 100.#[ADC Counts]
+LocalMaxNeighborhood = 2
+SumNThreshold = 50.
 # Step over the dark-corrected images...
 imageNumber = -1
 for dcimage in DCImages:
   imageNumber += 1
-  print "\tCreating Sum(N) spectra for dark corrected image", imageNumber + 1, "out of", str(nImagesPerFile) + "..."
+  print "\tCreating Sum(N) spectra for dark corrected image", imageNumber + 1, "out of", str(len(DCImages)) + "..."
   # First, make a list of the local maxima in each image.
   frameMaxima = filters.maximum_filter(dcimage, LocalMaxNeighborhood)
   # This is a mask with the same shape as the image that has Boolean values for each pixel to
@@ -199,15 +201,37 @@ for dcimage in DCImages:
   LabeledMask, nFeatures = ndimage.label(LocalMaxMask)
   # Get the coordinates of each local maximum pixel.
   LocalMaxCoords = np.array(ndimage.center_of_mass(dcimage, LabeledMask, range(1, nFeatures + 1)))
-  # Step over the local maximum coordinates, and get rid of the ones that are too close to the edge of the image.
-  EdgeBoundary = 1 # Just cut away the outer 1 pixel.  We can fiddle with this later if we have to...
-  EdgeRows = []
+  #################################################################################################
+  # DATA QUALITY CUT NUMBER 1:                                                                    #
+  # Step over the local maximum coordinates, and get rid of the ones that are too close to the    #
+  # edge of the image.                                                                            #
+  #################################################################################################
+  EdgeBoundary = 2 # Just cut away the outer 2 pixels.  We can fiddle with this later if we have to...
+  EdgePixelIndecies = []
   for i in range(len(LocalMaxCoords)):
     EdgeHit = False
     if((LocalMaxCoords[i, 0] < EdgeBoundary) or (LocalMaxCoords[i, 0] >= (nPixelsY - EdgeBoundary))): EdgeHit = True
     if((LocalMaxCoords[i, 1] < EdgeBoundary) or (LocalMaxCoords[i, 1] >= (nPixelsY - EdgeBoundary))): EdgeHit = True
-    if(EdgeHit): EdgeRows.append(i)
-  LocalMaxCoords = np.delete(LocalMaxCoords, EdgeRows, 0)
+    if(EdgeHit): EdgePixelIndecies.append(i)
+  print "\tDeleted", len(EdgePixelIndecies), "hit pixels with the edge cut."
+  LocalMaxCoords = np.delete(LocalMaxCoords, EdgePixelIndecies, 0)
+  #################################################################################################
+  # DATA QUALITY CUT NUMBER 2:                                                                    #
+  # Step over the remaining local maximum coordinates and see if there is a hit above threshold   #
+  # in in a different ADC channel at the same time to remove noise events.  This is done by       #
+  # in every pixel that is a multiple of xPixelsPerReadout (defined in line 70 at time of writing)#
+  # and checking if that is above threshold.                                                      #
+  #################################################################################################
+  NoiseCutPixelIndecies = []
+  for i in range(len(LocalMaxCoords)):
+    NoiseCut = False
+    for NoiseCheckPixel in range(xPixelsPerReadout, nPixelsX, xPixelsPerReadout):
+      CheckColumn = LocalMaxCoords[i, 1] + NoiseCheckPixel
+      if(CheckColumn >= nPixelsX): CheckColumn -= nPixelsX
+      if(dcimage[LocalMaxCoords[i, 0], CheckColumn] > (0.5 * LocalMaxThreshold)): NoiseCut = True
+    if(NoiseCut): NoiseCutPixelIndecies.append(i)
+  print "\tDeleted", len(NoiseCutPixelIndecies), "hit pixels with the nosie cut."
+  LocalMaxCoords = np.delete(LocalMaxCoords, NoiseCutPixelIndecies, 0)
   # Plot the dark corrected image with the coordinates of the local maxima marked on them.
   thisDCImageName = "DC_TEAMimage_" + str(imageNumber)
   thisDCImageTitle = "Dark-Corrected Image from TEAM Detector at Time Stamp: " + str(ImagesInThisFile[imageNumber][0][1])
@@ -223,6 +247,7 @@ for dcimage in DCImages:
     os.system("rm " + ImagePlotFilePath)
   plt.savefig(ImagePlotFilePath)
   # Scale the list of x,y coordinates so that they can be plotted over the existing image, and then do so.
+  #print LocalMaxCoords
   LocalMaxDisplayX = LocalMaxCoords[:, 1] * ((lSensorX) / dcimage.shape[1]) + (0.5 * lPixelX)
   LocalMaxDisplayY = LocalMaxCoords[:, 0] * ((lSensorY) / dcimage.shape[0]) + (0.5 * lPixelY)
   plt.plot(LocalMaxDisplayX, LocalMaxDisplayY, 'ro')
@@ -242,21 +267,29 @@ for dcimage in DCImages:
       thisSum1Spectrum.append(dcimage[coord[0]][coord[1]])
       # Build up the Sum(9) spectrum by collecting the values of the neighboring pixels.
       thisSum9Val = 0.
+      GoodCluster = False
+      # Step over the 3x3 cluster and make some quality checks: make sure that at least one of the neighboring pixels is above the SumNThreshold
       for i in range(-1, 2):
         for j in range(-1, 2):
-          # Make sure we haven't stepped off the edge of the image...
-          if(((coord[0] + i) >= 0) and ((coord[0] + i) < nPixelsY) and 
-             ((coord[1] + j) >= 0) and ((coord[1] + j) < nPixelsX) and 
-             (dcimage[coord[0] + i][coord[1] + j] > SumNThreshold)): thisSum9Val += dcimage[coord[0] + i][coord[1] + j]
+          if(dcimage[coord[0] + i][coord[1] + j] > SumNThreshold): GoodCluster = True
+      # If we still have a good cluster, then add up the neighborhood and append it to the histogram queue.
+      if(GoodCluster):
+        for i in range(-1, 2):
+          for j in range(-1, 2):
+            thisSum9Val += dcimage[coord[0] + i][coord[1] + j]
       thisSum9Spectrum.append(thisSum9Val)
       # And now the Sum(25) spectrum and the next-to-neighboring pixels.
       thisSum25Val = 0.
+      GoodCluster = False
+      # Step over the 5x5 cluster and make some quality checks: make sure that at least one of the neighboring pixels is above the SumNThreshold
       for i in range(-2, 3):
         for j in range(-2, 3):
-          # Make sure we haven't stepped off the edge of the image...
-          if(((coord[0] + i) >= 0) and ((coord[0] + i) < nPixelsY) and 
-             ((coord[1] + j) >= 0) and ((coord[1] + j) < nPixelsX) and 
-             (dcimage[coord[0] + i][coord[1] + j] > SumNThreshold)): thisSum25Val += dcimage[coord[0] + i][coord[1] + j]
+          if(dcimage[coord[0] + i][coord[1] + j] > SumNThreshold): GoodCluster = True
+      # If we still have a good cluster, then add up the neighborhood and append it to the histogram queue.
+      if(GoodCluster):
+        for i in range(-2, 3):
+          for j in range(-2, 3):
+            thisSum25Val += dcimage[coord[0] + i][coord[1] + j]
       thisSum25Spectrum.append(thisSum25Val)
   Sum01Spectra.append(thisSum1Spectrum)
   Sum09Spectra.append(thisSum9Spectrum)
@@ -273,16 +306,19 @@ for imageNumber in range(nImagesPerFile):
   # Sum(1)
   thisPlotTitle = 'Sum(1) Spectrum from TEAM Detector at Time Stamp: ' + str(ImagesInThisFile[imageNumber][0][1])
   ImagePlotFilePath = SSOutputDir + "/Sum01Spectrum" + str(imageNumber) + ".pdf"
+  if(len(Sum01Spectra[imageNumber]) == 0): Sum01Spectra[imageNumber].append(0.)
   Sum01Vals = PythonTools.PlotHistogram(Sum01Spectra[imageNumber], xBins, 'r', thisPlotTitle, xAxisTitle, yAxisTitle, ImagePlotFilePath)
   OutputFile.create_dataset('Sum01HistoVals_' + str(imageNumber), data=Sum01Vals)
   # Sum(9)
   thisPlotTitle = 'Sum(9) Spectrum from TEAM Detector at Time Stamp: ' + str(ImagesInThisFile[imageNumber][0][1])
   ImagePlotFilePath = SSOutputDir + "/Sum09Spectrum" + str(imageNumber) + ".pdf"
+  if(len(Sum09Spectra[imageNumber]) == 0): Sum09Spectra[imageNumber].append(0.)
   Sum09Vals = PythonTools.PlotHistogram(Sum09Spectra[imageNumber], xBins, 'g', thisPlotTitle, xAxisTitle, yAxisTitle, ImagePlotFilePath)
   OutputFile.create_dataset('Sum09HistoVals_' + str(imageNumber), data=Sum09Vals)
   # Sum(25)
   thisPlotTitle = 'Sum(25) Spectrum from TEAM Detector at Time Stamp: ' + str(ImagesInThisFile[imageNumber][0][1])
   ImagePlotFilePath = SSOutputDir + "/Sum25Spectrum" + str(imageNumber) + ".pdf"
+  if(len(Sum25Spectra[imageNumber]) == 0): Sum25Spectra[imageNumber].append(0.)
   Sum25Vals = PythonTools.PlotHistogram(Sum25Spectra[imageNumber], xBins, 'b', thisPlotTitle, xAxisTitle, yAxisTitle, ImagePlotFilePath)
   OutputFile.create_dataset('Sum25HistoVals_' + str(imageNumber), data=Sum25Vals)
 

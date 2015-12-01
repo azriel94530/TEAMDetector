@@ -17,9 +17,19 @@ import os
 StartTime = time.time()
 
 # Check for the appropriate number of arguments, and proceed if everything looks OK.
-if(len(sys.argv) != 2):
-  print "\tUSAGE: python BatchReadTeamData.py \"/path/to/the/list/of/TEAM/Detector/imges\""
-  print "\t         (Don\'t use a \'~\' because it doesn't work with the glob package.)"
+if(len(sys.argv) != 3):
+  print "\tUSAGE: python BatchReadTeamData.py \"/path/to/the/list/of/TEAM/Detector/imges\" ModeNumber"
+  print "\t       (Don\'t use a \'~\' in the path because it doesn't work with the glob package.)"
+  print "\t       \"ModeNumber\" is either a 2 or a 3, corresponding to the trigger mode."
+  exit()
+
+TriggerMode = int(sys.argv[2])
+if(TriggerMode == 2):
+  print "\tUsing Mode 2 trigger..."
+elif(TriggerMode == 3):
+  print "\tUsing Mode 3 trigger..."
+else:
+  print "\tTrigger mode must be either 2 or 3."
   exit()
 
 # Pull the path to the TEAM images in from the command line argument and create a list of file
@@ -31,7 +41,8 @@ print "\t...Found", len(FileNameList), "files."
 
 # Now loop over all those file names and run the read code on each one.
 for filename in FileNameList:
-  thisCommand = "python ReadTEAMData_mode2.py " + filename
+  if(TriggerMode == 2): thisCommand = "python ReadTEAMData_mode2.py " + filename
+  if(TriggerMode == 3): thisCommand = "python ReadTEAMData_mode3.py " + filename
   os.system(thisCommand)
 
 # Get the end time and report how long this calculation took
