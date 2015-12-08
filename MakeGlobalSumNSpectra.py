@@ -41,6 +41,7 @@ for name in FileNameList:
 # Extract the summed Sum(N) spectra bin values.
 Sum1SpectraVals, Sum9SpectraVals, Sum25SpectraVals = [], [], []
 for thisFile in InputFiles:
+  print "\tProcessing", thisFile.filename.split("/")[-1] + "..."
   Sum1SpectraVals.append(np.array(thisFile['SummedSum01Vals']))
   Sum9SpectraVals.append(np.array(thisFile['SummedSum09Vals']))
   Sum25SpectraVals.append(np.array(thisFile['SummedSum25Vals']))
@@ -55,7 +56,7 @@ for i in range(len(InputFiles)):
   GlobalSum25Spectrum += Sum25SpectraVals[i]
 
 # Set up the x axis bins for these histograms.  These should really get read out of the hdf5 file...
-xLo, xHi, xStep = -500., 29500., 10.
+xLo, xHi, xStep = InputFiles[0]['xAxisParams'][0], InputFiles[0]['xAxisParams'][1], InputFiles[0]['xAxisParams'][2]
 xBins = np.arange(xLo, xHi + xStep, xStep)
 xBinCenters = [x + (0.5 * xStep) for x in xBins[:-1]]
 
@@ -87,48 +88,53 @@ ROOT.gStyle.SetOptFit(1)
 Sum1RootHisto  = PythonTools_ROOT.MakePixValHisto("Sum1RootHisto",  "Sum(1) Histogram",  len(xBinCenters), xLo, xHi, ROOT.kBlack)
 Sum9RootHisto  = PythonTools_ROOT.MakePixValHisto("Sum9RootHisto",  "Sum(9) Histogram",  len(xBinCenters), xLo, xHi, ROOT.kBlue)
 Sum25RootHisto = PythonTools_ROOT.MakePixValHisto("Sum25RootHisto", "Sum(25) Histogram", len(xBinCenters), xLo, xHi, ROOT.kRed)
-xRangeL, xRangeH = 0., 20000.
+xRangeL, xRangeH = 0., 4000.
 yRangeL, yRangeH = 0.5, 3000.
 for i in range(len(xBinCenters)):
   Sum1RootHisto.SetBinContent(  Sum1RootHisto.FindBin(xBinCenters[i]), GlobalSum1Spectrum[i] )
   Sum9RootHisto.SetBinContent(  Sum9RootHisto.FindBin(xBinCenters[i]), GlobalSum9Spectrum[i] )
   Sum25RootHisto.SetBinContent(Sum25RootHisto.FindBin(xBinCenters[i]), GlobalSum25Spectrum[i])
 # Sum(1)
-LandauFunc1 = PythonTools_ROOT.GetLandauFunction("LandauFunc1", 100., 9000., Sum1RootHisto.GetLineColor(), 2, 5000., 400., 200.)
-Sum1RootHisto.Fit("LandauFunc1",   "LEM", "", 500., 1000.)
-Sum1FitAnnot = PythonTools_ROOT.MakeFitAnnotationLandau(LandauFunc1)
+FitModel1 = PythonTools_ROOT.GetLandauPlusGaus("FitModel1", 100., 3500., Sum1RootHisto.GetLineColor(), 2, 5000., 400., 200., 10000., 100., 200.)
+Sum1RootHisto.Fit("FitModel1", "LEM", "", 200., 1200.)
+Sum1FitAnnot = PythonTools_ROOT.MakeFitAnnotationLandau(FitModel1)
 Sum1RootHisto.GetXaxis().SetRangeUser(xRangeL, xRangeH)
 Sum1RootHisto.GetYaxis().SetRangeUser(yRangeL, yRangeH)
 # Sum(9)
-LandauFunc9 = PythonTools_ROOT.GetLandauFunction("LandauFunc9", 100., 9000., Sum9RootHisto.GetLineColor(), 2, 5000., 600., 200.)
-Sum9RootHisto.Fit("LandauFunc9",   "LEM", "", 400., 1400.)
-Sum9FitAnnot = PythonTools_ROOT.MakeFitAnnotationLandau(LandauFunc9)
+FitModel9 = PythonTools_ROOT.GetLandauPlusGaus("FitModel9", 100., 3500., Sum9RootHisto.GetLineColor(), 2, 10000., 600., 200., 10000., 300., 100.)
+Sum9RootHisto.Fit("FitModel9", "LEM", "", 200., 1200.)
+Sum9FitAnnot = PythonTools_ROOT.MakeFitAnnotationLandau(FitModel9)
 Sum9RootHisto.GetXaxis().SetRangeUser(xRangeL, xRangeH)
 Sum9RootHisto.GetYaxis().SetRangeUser(yRangeL, yRangeH)
 # Sum(25)
-LandauFunc25 = PythonTools_ROOT.GetLandauFunction("LandauFunc25", 100., 9000., Sum25RootHisto.GetLineColor(), 2, 5000., 850., 600.)
-Sum25RootHisto.Fit("LandauFunc25", "LEM", "", 500., 2000.)
-Sum25FitAnnot = PythonTools_ROOT.MakeFitAnnotationLandau(LandauFunc25)
+FitModel25 = PythonTools_ROOT.GetLandauPlusGaus("FitModel25", 100., 3500., Sum25RootHisto.GetLineColor(), 2, 5000., 700., 200., 10000., 200., 100.)
+Sum25RootHisto.Fit("FitModel25", "LEM", "", 200., 1200.)
+Sum25FitAnnot = PythonTools_ROOT.MakeFitAnnotationLandau(FitModel25)
 Sum25RootHisto.GetXaxis().SetRangeUser(xRangeL, xRangeH)
 Sum25RootHisto.GetYaxis().SetRangeUser(yRangeL, yRangeH)
 aCanvas, aPad = RootPlotLibs.GetReadyToPlot()
 aCanvas.Draw()
 aCanvas.cd()
-aPad.SetLogy(1)
+aPad.SetLogy(0)
 aPad.Draw()
 aPad.cd()
 
 Histos = [Sum1RootHisto, Sum9RootHisto, Sum25RootHisto]
 Annots = [Sum1FitAnnot, Sum9FitAnnot, Sum25FitAnnot]
+FitModels = [FitModel1, FitModel9, FitModel25]
 for i in range(len(Histos)):
   Histos[i].Draw()
+  FitModelComps = PythonTools_ROOT.GetLandauPlusGausComps(FitModels[i])
+  for comp in FitModelComps: 
+    comp.Draw("samel")
+    
   Annots[i].Draw()
   aCanvas.Update()
   aCanvas.SaveAs(FileNameList[0].replace(FileNameList[0].split("/")[-1], Histos[i].GetName() + ".Fits.png"))
 
-print "\t\t Sum(1) Fit Area:", LandauFunc1.Integral( xRangeL, xRangeH)
-print "\t\t Sum(9) Fit Area:", LandauFunc9.Integral( xRangeL, xRangeH)
-print "\t\tSum(25) Fit Area:", LandauFunc25.Integral(xRangeL, xRangeH)
+print "\t\t Sum(1) Fit Area:", FitModel1.Integral( xRangeL, xRangeH)
+print "\t\t Sum(9) Fit Area:", FitModel9.Integral( xRangeL, xRangeH)
+print "\t\tSum(25) Fit Area:", FitModel25.Integral(xRangeL, xRangeH)
 
 # Get the end time and report how long this calculation took
 StopTime = time.time()
