@@ -205,3 +205,44 @@ def MakeFitAnnotationLandau(fitmodel):
   ThisLine = "Norm. = "   + "{:6.2f}".format(Norm) + " #pm " + "{:1.2f}".format(NoEr)
   thisAnnotation.AddText(ThisLine)
   return thisAnnotation
+
+# Create a TF1 for a Landau function plus a Gaussian...
+def GetLandauPlusGaus(name, xlo, xhi, color, linestyle, lnorm, lmean, lwidth, gnorm, gmean, gwidth):
+  FitModel = ROOT.TF1("FitModel", "([0] * TMath::Landau(x,[1],[2])) + ([3] * TMath::Gaus(x,[4],[5]))", xlo, xhi)
+  FitModel.SetName(name)
+  FitModel.SetLineColor(color)
+  FitModel.SetLineStyle(linestyle)
+  FitModel.SetLineWidth(5)
+  FitModel.SetParName(   0, "L. Norm.")
+  FitModel.SetParameters(0, lnorm)
+  FitModel.SetParLimits( 0, 0., 2. * lnorm)
+  FitModel.SetParName(   1, "L. Mean")
+  FitModel.SetParameters(1, lmean)
+  FitModel.SetParLimits( 1, 0.8 * lmean, 1.2 * lmean)
+  FitModel.SetParName(   2, "L. Width")
+  FitModel.SetParameters(2, lwidth)
+  FitModel.SetParLimits( 2, 0.5 * lwidth, 2. * lwidth)
+  FitModel.SetParName(   3, "G. Norm.")
+  FitModel.SetParameters(3, gnorm)
+  FitModel.SetParLimits( 3, 0., 2. * gnorm)
+  FitModel.SetParName(   4, "G. Mean")
+  FitModel.SetParameters(4, gmean)
+  FitModel.SetParLimits( 4, 0.8 * gmean, 1.2 * gmean)
+  FitModel.SetParName(   5, "G. Width")
+  FitModel.SetParameters(5, gwidth)
+  FitModel.SetParLimits( 5, 0.5 * gwidth, 2. * gwidth)
+  return FitModel
+# Separate out the components of the Landau plus Gaussian model.
+def GetLandauPlusGausComps(fitmodel):
+  LandauComp = ROOT.TF1("LandauComp", "[0] * TMath::Landau(x,[1],[2])", fitmodel.GetXmin(), fitmodel.GetXmax())
+  LandauComp.SetLineColor(fitmodel.GetLineColor() + 1)
+  for i in [0, 1, 2]:
+    LandauComp.FixParameter(i, fitmodel.GetParameter(i))
+  GausComp = ROOT.TF1("GausComp", "[3] * TMath::Gaus(x,[4],[5])", fitmodel.GetXmin(), fitmodel.GetXmax())
+  GausComp.SetLineColor(fitmodel.GetLineColor() - 1)
+  for i in [3, 4, 5]:
+    GausComp.FixParameter(i, fitmodel.GetParameter(i))
+  for func in [LandauComp, GausComp]:
+    func.SetLineStyle(fitmodel.GetLineStyle())
+    func.SetLineWidth(fitmodel.GetLineWidth())
+  return [LandauComp, GausComp]
